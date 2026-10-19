@@ -1,93 +1,202 @@
-# SiegeGraph
+# ⛭ SiegeGraph
 
-Attack-path mapping and evidence management for authorized penetration
-testing engagements.
+> **Attack-Path Mapping & Evidence Management**
+> A graph-based engagement tracker for authorized penetration testing — map the kill chain, hash the evidence, draft the report.
 
-SiegeGraph tracks what a tester already knows — hosts, services,
-vulnerabilities, credentials, pivots — as a directed graph, attaches
-hashed evidence to each step, and renders the kill chain and findings
-straight into a report. It does not scan or exploit anything itself; it
-organizes the output of the tools you already use.
+[![CI](https://github.com/Ernest-Kosmatko/SiegeGraph/actions/workflows/ci.yml/badge.svg)](https://github.com/Ernest-Kosmatko/SiegeGraph/actions)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-## Features
+---
 
-- Directed attack-path graph: host → service → vulnerability → credential → pivot → objective
-- Content-addressed evidence store (SHA-256 per file, tamper-evident)
-- Kill-chain path queries (`host` → `objective`) over the current graph
-- Markdown report generation with an embedded Mermaid diagram
-- Optional AI advisor layer: local Ollama by default, with opt-in
-  Anthropic, OpenAI, or Gemini backends per engagement
-- Single-file SQLite project per engagement — easy to archive, encrypt, or wipe
+## 🔍 What is SiegeGraph?
 
-## Installation
+SiegeGraph is a local-first engagement tracker for **authorized** penetration tests. It does not scan or exploit anything — it organizes what you already found with your other tools:
+
+- **Attack-Path Graph** — hosts, services, vulnerabilities, credentials, pivots, and objectives as a directed graph
+- **Kill-Chain Queries** — trace every path from an entry point to an objective (e.g. host → domain admin)
+- **Evidence Store** — files are hashed (SHA-256) on ingest, so nothing attached to a finding can be altered later unnoticed
+- **Report Generation** — one command turns the graph + evidence into a Markdown report with an embedded diagram
+- **AI Advisor (optional)** — ask a model for attack-vector suggestions using only data already in the engagement file; local by default, cloud providers opt-in
+- **Single-file projects** — one SQLite file per engagement, trivial to archive or encrypt
+
+Built on Python stdlib + a small, auditable dependency set (`networkx`, `typer`, `httpx`).
+
+---
+
+## 📸 Sample Session
+
+```
+$ siegegraph init acme.siege --name "Acme Corp - External Pentest" \
+      --client "Acme Corp" --authorized-by "J. Smith (CISO)" --scope "10.10.10.0/24"
+[+] Engagement created: acme.siege
+
+$ siegegraph node add -p acme.siege -t host -l 10.10.10.5
+[+] Added host: host_07ded3178d  (10.10.10.5)
+
+$ siegegraph node add -p acme.siege -t vulnerability -l "MS17-010"
+[+] Added vulnerability: vuln_7716e312b4  (MS17-010)
+
+$ siegegraph edge add -p acme.siege -s vuln_7716e312b4 -t host_07ded3178d --type affects
+[+] Linked: vuln_7716e312b4 -[affects]-> host_07ded3178d
+
+$ siegegraph evidence add -p acme.siege -n vuln_7716e312b4 -d "nmap smb-vuln-ms17-010 output" -f scan.txt
+[+] Evidence recorded for vuln_7716e312b4
+
+$ siegegraph report -p acme.siege --out report.md
+[+] Report written: report.md
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.10+
+- An engagement **you are explicitly authorized, in writing, to test**
+
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/Ernest-Kosmatko/SiegeGraph.git
+cd SiegeGraph
+
+# Install (creates the `siegegraph` CLI command)
 pip install -e .
 ```
 
-Requires Python 3.10+.
-
-## Usage
+### Usage
 
 ```bash
 # Start a new engagement
-siegegraph init acme.siege --name "Acme Corp - External Pentest" \
-    --client "Acme Corp" --authorized-by "J. Smith (CISO)" --scope "10.10.10.0/24"
+siegegraph init acme.siege --name "Acme Corp - External Pentest" --client "Acme Corp"
 
-# Record what you find
+# Build the attack-path graph as you go
 siegegraph node add -p acme.siege -t host -l 10.10.10.5
 siegegraph node add -p acme.siege -t service -l "smb/445"
-siegegraph node add -p acme.siege -t vulnerability -l "MS17-010"
-
 siegegraph edge add -p acme.siege -s <host_id> -t <service_id> --type exposes
-siegegraph edge add -p acme.siege -s <vuln_id> -t <service_id> --type affects
 
-# Attach proof
-siegegraph evidence add -p acme.siege -n <vuln_id> -d "nmap script output" -f scan.txt
+# Attach proof, hashed on ingest
+siegegraph evidence add -p acme.siege -n <vuln_id> -d "scan output" -f scan.txt
 
 # Visualize and report
 siegegraph graph -p acme.siege --out attack_path.mmd
 siegegraph report -p acme.siege --out report.md
-```
 
-## AI Advisor (optional)
-
-```bash
+# Optional: ask an AI advisor for next steps on one node
 siegegraph ai advise -p acme.siege -n <vuln_id> --backend ollama
 ```
 
-The advisor is given only the node and evidence already stored in the
-engagement file — never live network data — and its suggestions are never
-executed automatically. Every call is logged in the project's `ai_log`
-table so a client can audit exactly what was sent to which provider. See
-[`docs/ai-advisor.md`](docs/ai-advisor.md) and
-[`config/providers.example.yaml`](config/providers.example.yaml).
+### All Commands
 
-Default backend is local Ollama: no API key, no external request. Cloud
-backends (Anthropic, OpenAI, Gemini) are opt-in per engagement and require
-their respective API keys as environment variables.
+| Command | Description |
+|---|---|
+| `siegegraph init` | Create a new engagement file |
+| `siegegraph node add / list` | Add or list graph nodes |
+| `siegegraph edge add` | Link two nodes along the kill chain |
+| `siegegraph evidence add` | Attach a hashed file + description to a node |
+| `siegegraph graph` | Render the attack path as Mermaid |
+| `siegegraph report` | Generate the Markdown report |
+| `siegegraph ai advise` | Query an AI advisor about one node |
 
-## Architecture
+---
+
+## 🧠 AI Advisor
+
+SiegeGraph can optionally query a language model for suggestions while you work, using only data already stored in the engagement file — never live network traffic, never other projects.
+
+| Backend | Requires | Data leaves the machine? |
+|---|---|---|
+| `ollama` (default) | Local Ollama install | No |
+| `anthropic` | `ANTHROPIC_API_KEY` | Yes |
+| `openai` | `OPENAI_API_KEY` | Yes |
+| `gemini` | `GEMINI_API_KEY` | Yes |
+
+Every call is logged in the project's own `ai_log` table for client-side audit, and nothing an advisor returns is ever executed automatically — it is printed for the operator to review. See [`docs/ai-advisor.md`](docs/ai-advisor.md).
+
+---
+
+## 🧠 Use as a Library
+
+```python
+from siegegraph.core.graph import Project
+from siegegraph.core.models import Engagement, Node, NodeType, Edge, EdgeType
+from siegegraph.export.report import build
+
+p = Project("acme.siege")
+p.create_engagement(Engagement(name="Acme Corp Pentest", client="Acme Corp"))
+
+host = p.add_node(Node(type=NodeType.HOST, label="10.10.10.5"))
+vuln = p.add_node(Node(type=NodeType.VULNERABILITY, label="MS17-010"))
+p.add_edge(Edge(source=vuln.id, target=host.id, type=EdgeType.AFFECTS))
+
+print(build(p))  # full Markdown report, mermaid diagram included
+```
+
+---
+
+## 🏗️ Project Structure
 
 ```
-ingest (manual / scripted) → core.graph (SQLite + networkx)
-                                   │
-                    ┌──────────────┼──────────────┐
-                 evidence       ai.router        export
-                 (hashed        (optional,       (mermaid,
-                  files)        logged calls)     markdown)
+SiegeGraph/
+├── siegegraph/
+│   ├── core/              # Graph model + SQLite persistence
+│   │   ├── models.py      # Node, Edge, Evidence, Engagement
+│   │   └── graph.py       # Project store, kill-chain queries
+│   ├── evidence/
+│   │   └── store.py       # Content-addressed (SHA-256) evidence files
+│   ├── export/
+│   │   ├── mermaid.py     # Attack-path diagram rendering
+│   │   └── report.py      # Markdown report generation
+│   ├── ai/
+│   │   ├── base.py        # AdvisorProvider contract
+│   │   ├── router.py      # Backend selection + audit logging
+│   │   └── providers/     # ollama, anthropic, openai, gemini
+│   ├── db/
+│   │   └── schema.sql     # SQLite schema
+│   └── cli.py             # CLI entry point (Typer)
+├── tests/                 # pytest suite
+├── docs/
+│   ├── methodology.md     # Data model & design rationale
+│   └── ai-advisor.md      # AI advisor data handling
+├── config/
+│   └── providers.example.yaml
+├── .github/workflows/ci.yml
+├── pyproject.toml
+└── README.md
 ```
 
-See [`docs/methodology.md`](docs/methodology.md) for the data model and
-design rationale.
+---
 
-## Legal notice
+## 🧪 Running Tests
 
-SiegeGraph is intended for use only in engagements with documented,
-written authorization from the system owner. The `authorized_by` and
-`scope_note` fields exist to keep that record attached to the data itself.
-Misuse against systems you do not have permission to test is illegal.
+```bash
+pip install -e . pytest
+pytest tests/ -v
+```
 
-## License
+---
 
-Apache License 2.0 — see [LICENSE](LICENSE).
+## ⚠️ Legal Disclaimer
+
+**This tool is for authorized security testing only.**
+Using SiegeGraph to document activity against systems you do not have explicit, written permission to test is illegal under the Computer Fraud and Abuse Act (CFAA), the UK Computer Misuse Act, and equivalent laws worldwide.
+
+The author assumes no liability for misuse of this software.
+**Always get written authorization before testing any target.**
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) © Ernest Kosmatko
+
+---
+
+## 👤 Author
+
+**Ernest Kosmatko**
+GitHub: [@Ernest-Kosmatko](https://github.com/Ernest-Kosmatko)
