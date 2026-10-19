@@ -1,0 +1,25 @@
+# Copy to providers.yaml and fill in per engagement. Never commit real keys.
+# Default is "ollama" - fully local, no data leaves the machine.
+
+default_backend: ollama
+
+ollama:
+  host: http://localhost:11434
+  model: llama3.1
+
+anthropic:
+  api_key_env: ANTHROPIC_API_KEY
+  model: claude-sonnet-5-5
+
+openai:
+  api_key_env: OPENAI_API_KEY
+  model: gpt-5
+
+gemini:
+  api_key_env: GEMINI_API_KEY
+  model: gemini-2.5-pro
+
+# Per-client override example:
+# clients:
+#   acme-corp:
+#     allowed_backends: [ollama]   # NDA forbids sending data to third-party APIs

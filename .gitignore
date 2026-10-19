@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+
+# Engagement data must never be committed
+*.siege
+*.evidence/
+config/providers.yaml
+report.md
